@@ -1,32 +1,41 @@
 # Agent Reliability Lab
 
-Agent Reliability Lab is an open-source runtime for building more dependable AI agents on multi-step tasks. It provides a small but practical harness for: planning, tool execution, retries, approvals, durable state, and evaluation.
+Agent Reliability Lab is an open-source agent runtime for building reliable, observable, and controllable AI systems on complex multi-step tasks.
 
-The goal is not to build a chat UI. Instead, it focuses on the runtime that makes agents more controllable and observable in real workflows.
+It is designed around the idea that reliability is a runtime concern, not just a model prompt concern. The project helps you manage:
+
+- planning and decomposition,
+- tool selection and execution,
+- retry and failure handling,
+- human approval gates,
+- durable execution state,
+- evaluation and benchmarking.
+
+This is not another chat UI. It is the orchestration layer behind dependable agent workflows.
 
 ## Why this exists
 
-AI agents often fail on long-running tasks because they:
+Most agent failures are not caused by a single bad model response. They happen when the runtime lacks:
 
-- lose track of the current objective,
-- execute tools without guardrails,
-- retry poorly when tools fail,
-- lack approval checkpoints for risky actions,
-- have no structured execution state,
-- are hard to evaluate objectively.
+- explicit task planning,
+- structured tool metadata,
+- retries with bounded policies,
+- policy enforcement for risky actions,
+- state persistence across steps,
+- objective evaluation of the final outcome.
 
-This project treats those as first-class concerns.
+This library addresses those problems directly.
 
-## Core concepts
+## Core runtime components
 
-- Planner: turns a user task into an actionable execution plan.
-- Tool registry: stores tools with metadata, retry settings, and risk levels.
-- Approval gate: requires explicit approval for actions marked as risky.
-- State store: captures intermediate results for durable execution.
-- Retry loop: reruns failed tool calls with bounded retry policies.
-- Evaluator: scores the final execution based on the task, outputs, and state.
+- Planner: decomposes a user request into a task plan.
+- Tool registry: stores tool metadata and execution functions.
+- Approval manager: blocks or requires approval for risky operations.
+- State store: tracks execution state across plan steps.
+- Retry policy: retries failures with controlled effort.
+- Evaluator: scores each run for successful completion and process quality.
 
-## Quick start
+## Installation
 
 ```bash
 python -m venv .venv
@@ -34,58 +43,90 @@ source .venv/bin/activate
 pip install -e .
 ```
 
-## Example usage
+## Quick start
 
 ```python
-from agent_reliability_lab.runtime import Runtime
-from agent_reliability_lab.tools import ToolSpec
+from agent_reliability_lab import Runtime, ToolSpec
 
 
 def search_docs(context):
     task = context["task"]
-    return f"Found documentation for: {task}"
+    return {"result": f"Looked up docs for: {task}"}
 
 
-def write_report(context):
+def write_summary(context):
     task = context["task"]
-    context["state"]["report"] = f"Report generated for {task}"
-    return "Report written"
+    context["state"]["summary"] = f"Summary generated for {task}"
+    return "summary-written"
 
 runtime = Runtime()
 runtime.register_tool(
     ToolSpec(
         name="search_docs",
-        description="Search internal docs and reference material",
+        description="Search internal docs for reference material",
         executor=search_docs,
     )
 )
 runtime.register_tool(
     ToolSpec(
-        name="write_report",
-        description="Create a report from completed research",
-        executor=write_report,
+        name="write_summary",
+        description="Write a report after research has been completed",
+        executor=write_summary,
         requires_approval=False,
     )
 )
 
-result = runtime.run("Write a migration report for the API")
-print(result["evaluation"]) 
+result = runtime.run("Draft a launch report for the reliability harness")
+print(result.evaluation)
+print(result.trace)
 ```
 
-## Repository layout
+## Approvals
 
-- `src/agent_reliability_lab/` — runtime implementation
-- `examples/` — sample usage and harness setup
-- `tests/` — unit tests for core behavior
+Some tools may be risky, such as file writes, shell commands, or external API mutations. These tools can require approval before they run.
+
+```python
+from agent_reliability_lab import ApprovalManager, Runtime, ToolSpec
+
+
+def shell_exec(context):
+    return "ran command"
+
+
+def always_approve(tool, context):
+    return True
+
+runtime = Runtime(
+    approval_manager=ApprovalManager(approver=always_approve)
+)
+runtime.register_tool(
+    ToolSpec(
+        name="deploy",
+        description="Deploy to production",
+        executor=shell_exec,
+        requires_approval=True,
+        risk_level="high",
+    )
+)
+```
+
+## Architecture notes
+
+The runtime is intentionally lightweight and composable:
+
+- all core classes are Python dataclasses or regular classes,
+- no heavy dependencies are required,
+- you can swap in custom planners, state stores, or evaluators,
+- the same harness can be used in CLI, service, or workflow environments.
 
 ## Roadmap
 
-- durable state backends (SQLite, Redis, Postgres)
-- structured tool schemas and validation
-- plan re-planning loops
-- event streaming and observability
-- benchmark suites for agent reliability
-- UI dashboard for execution traces
+- SQLite and Redis-backed state stores
+- durable event logs and execution traces
+- stronger policy enforcement and compliance checks
+- benchmark suites for reliability scoring
+- API server and dashboards
+- integration with external tool adapters
 
 ## License
 

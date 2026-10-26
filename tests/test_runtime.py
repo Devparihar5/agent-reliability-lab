@@ -1,32 +1,25 @@
-from agent_reliability_lab.runtime import Runtime, ToolSpec
+from agent_reliability_lab import ApprovalManager, Runtime, ToolSpec
 
 
-def search_docs(context):
-    task = context["task"]
-    return f"Found documentation for: {task}"
+def deploy_to_prod(context):
+    return {"status": "deployed"}
 
 
-def write_summary(context):
-    task = context["task"]
-    context["state"]["summary"] = f"Summary drafted for {task}"
-    return "Summary created"
+def always_approve(tool, context):
+    return True
 
 
-runtime = Runtime()
+runtime = Runtime(approval_manager=ApprovalManager(approver=always_approve))
 runtime.register_tool(
     ToolSpec(
-        name="search_docs",
-        description="Search internal docs and reference materials",
-        executor=search_docs,
-    )
-)
-runtime.register_tool(
-    ToolSpec(
-        name="write_summary",
-        description="Create a written summary after gathering evidence",
-        executor=write_summary,
+        name="deploy",
+        description="Deploy to production",
+        executor=deploy_to_prod,
+        requires_approval=True,
+        risk_level="high",
     )
 )
 
-result = runtime.run("Draft a launch summary for the reliability harness")
-print(result["evaluation"])
+result = runtime.run("Ship the production update")
+print(result.evaluation)
+print(result.trace)
